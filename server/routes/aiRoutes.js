@@ -1,8 +1,55 @@
+
 const express = require("express");
 const { GoogleGenAI } = require("@google/genai");
 const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+const sleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const getErrorStatus = (error) =>
+  error.status || error.code || error.error?.code;
+
+async function generateWithRetry(ai, model, message, systemInstruction) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: message,
+        config: {
+          systemInstruction,
+        },
+      });
+
+      const reply = response.text?.trim();
+
+      if (reply) return reply;
+
+      throw new Error("AI returned an empty response.");
+    } catch (error) {
+      lastError = error;
+
+      const status = getErrorStatus(error);
+
+      if (![500, 502, 503, 504].includes(Number(status))) {
+        throw error;
+      }
+
+      console.log(
+        `Gemini ${model}: attempt ${attempt} failed with ${status}`
+      );
+
+      if (attempt < 3) {
+        await sleep(attempt * 1000);
+      }
+    }
+  }
+
+  throw lastError;
+}
 
 router.post("/chat", protect, async (req, res) => {
   try {
@@ -49,18 +96,10 @@ Final Career Readiness Score: ${finalScore}%
 Readiness Level: ${readinessLevel}
 
 Known Skills:
-${
-  selectedSkills.length > 0
-    ? selectedSkills.join(", ")
-    : "No skills recorded"
-}
+${selectedSkills.length > 0 ? selectedSkills.join(", ") : "No skills recorded"}
 
 Missing Skills:
-${
-  missingSkills.length > 0
-    ? missingSkills.join(", ")
-    : "No major skill gaps recorded"
-}
+${missingSkills.length > 0 ? missingSkills.join(", ") : "No major skill gaps recorded"}
 
 Rules:
 - Personalize advice using the student's CareerLens data.
@@ -77,53 +116,69 @@ Rules:
 - Keep responses useful and reasonably concise.
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: message.trim(),
-      config: {
-        systemInstruction: systemInstruction,
-      },
-    });
+    let reply;
 
-    const reply = response.text?.trim();
+    try {
+      // Primary model: retry up to 3 times for temporary server errors
+      reply = await generateWithRetry(
+        ai,
+        "gemini-3.8-flash",
+        message.trim(),
+        systemInstruction
+      );
+    } catch (primaryError) {
+      const status = getErrorStatus(primaryError);
 
-    if (!reply) {
-      return res.status(500).json({
-        message: "AI did not return a response.",
-      });
+      // Use backup only when the primary model is temporarily unavailable
+      if (![500, 502, 503, 504].includes(Number(status))) {
+        throw primaryError;
+      }
+
+      console.log("Primary Gemini model unavailable. Trying backup model...");
+
+      reply = await generateWithRetry(
+        ai,
+        "gemini-3.5-flash-lite",
+        message.trim(),
+        systemInstruction
+      );
     }
 
     return res.status(200).json({
       message: "AI response generated successfully",
-      reply: reply,
+      reply,
     });
   } catch (error) {
     console.log("CareerLens Gemini Error:", error);
 
-    if (error.status === 429) {
+    const status = Number(getErrorStatus(error));
+
+    if (status === 429) {
       return res.status(429).json({
-        message:
-          "Gemini free-tier usage limit reached. Please try again later.",
+        message: "Gemini usage limit reached. Please try again later.",
       });
     }
 
-    if (error.status === 400) {
+    if (status === 400) {
       return res.status(400).json({
-        message:
-          "Gemini could not process this request. Please try again.",
+        message: "Gemini could not process this request. Please try again.",
       });
     }
 
-    if (error.status === 401 || error.status === 403) {
+    if (status === 401 || status === 403) {
       return res.status(500).json({
-        message:
-          "Gemini API key is invalid or does not have permission.",
+        message: "Gemini API key is invalid or does not have permission.",
+      });
+    }
+
+    if ([500, 502, 503, 504].includes(status)) {
+      return res.status(503).json({
+        message: "AI is temporarily busy. Please try again in a moment.",
       });
     }
 
     return res.status(500).json({
-      message:
-        "Unable to generate AI career guidance right now.",
+      message: "Unable to generate AI career guidance right now.",
     });
   }
 });
