@@ -1,6 +1,7 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../api";
 
 function FinalResult() {
   const navigate = useNavigate();
@@ -80,8 +81,8 @@ function FinalResult() {
       setSaving(true);
       setSaveMessage("");
 
-      const response = await axios.post(
-        "http://localhost:5000/api/analysis/save",
+      const response = await API.post(
+        "/api/analysis/save",
         {
           userId: user.id,
           career: selectedCareer,

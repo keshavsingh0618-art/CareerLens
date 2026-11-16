@@ -1,6 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../api";
 
 function Assessment() {
   const navigate = useNavigate();
@@ -41,8 +42,8 @@ function Assessment() {
       }
 
       try {
-        const response = await axios.get(
-          `http://localhost:5000/api/questions/career/${encodeURIComponent(
+        const response = await API.get(
+          `/api/questions/career/${encodeURIComponent(
             selectedCareer
           )}`,
           {

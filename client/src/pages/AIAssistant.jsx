@@ -1,6 +1,7 @@
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../api";
 import ReactMarkdown from "react-markdown";
 
 function AIAssistant() {
@@ -66,18 +67,12 @@ function AIAssistant() {
 
   const normalizeMarkdown = (text = "") => {
     return text
-      // Convert literal \n into actual new lines
       .replace(/\\n/g, "\n")
-
-      // Remove escaping from Markdown symbols
       .replace(
         /\\([#*_`~>+-])/g,
         "$1"
       )
-
-      // Clean excessive blank lines
       .replace(/\n{3,}/g, "\n\n")
-
       .trim();
   };
 
@@ -142,8 +137,8 @@ What would you like help with?`,
     setLoading(true);
 
     try {
-      const response = await axios.post(
-        "http://localhost:5000/api/ai/chat",
+      const response = await API.post(
+        "/api/ai/chat",
         {
           message: messageText,
 

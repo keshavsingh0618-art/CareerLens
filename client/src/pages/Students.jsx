@@ -1,6 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../api";
 
 function Students() {
   const navigate = useNavigate();
@@ -20,8 +21,8 @@ function Students() {
       }
 
       try {
-        const response = await axios.get(
-          "http://localhost:5000/api/admin/students",
+        const response = await API.get(
+          "/api/admin/students",
           {
             headers: {
               Authorization: `Bearer ${token}`,

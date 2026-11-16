@@ -1,6 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../api";
 
 function Questions() {
   const navigate = useNavigate();
@@ -30,8 +31,8 @@ function Questions() {
     try {
       const token = getToken();
 
-      const response = await axios.get(
-        "http://localhost:5000/api/questions",
+      const response = await API.get(
+        "/api/questions",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -113,8 +114,8 @@ function Questions() {
       };
 
       if (editingId) {
-        await axios.put(
-          `http://localhost:5000/api/questions/${editingId}`,
+        await API.put(
+          `/api/questions/${editingId}`,
           dataToSend,
           {
             headers: {
@@ -127,8 +128,8 @@ function Questions() {
           "Question updated successfully ✅"
         );
       } else {
-        await axios.post(
-          "http://localhost:5000/api/questions",
+        await API.post(
+          "/api/questions",
           dataToSend,
           {
             headers: {
@@ -184,8 +185,8 @@ function Questions() {
     try {
       const token = getToken();
 
-      await axios.delete(
-        `http://localhost:5000/api/questions/${id}`,
+      await API.delete(
+        `/api/questions/${id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

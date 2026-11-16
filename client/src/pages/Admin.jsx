@@ -1,6 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../api";
 
 function Admin() {
   const navigate = useNavigate();
@@ -29,8 +30,8 @@ function Admin() {
       }
 
       try {
-        const response = await axios.get(
-          "http://localhost:5000/api/admin/stats",
+        const response = await API.get(
+          "/api/admin/stats",
           {
             headers: {
               Authorization: `Bearer ${token}`,

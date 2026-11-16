@@ -1,6 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../api";
 
 function History() {
   const navigate = useNavigate();
@@ -21,8 +22,8 @@ function History() {
       }
 
       try {
-        const response = await axios.get(
-          `http://localhost:5000/api/analysis/history/${user.id}`
+        const response = await API.get(
+          `/api/analysis/history/${user.id}`
         );
 
         setAnalyses(response.data.analyses || []);

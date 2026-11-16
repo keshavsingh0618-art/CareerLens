@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import API from "../api";
 
 function FinalResult() {
   const navigate = useNavigate();
@@ -93,8 +93,8 @@ function FinalResult() {
       setSaving(true);
       setSaveMessage("");
 
-      const response = await axios.post(
-        "http://localhost:5000/api/analysis/save",
+      const response = await API.post(
+        "/api/analysis/save",
         {
           userId: user.id || user._id,
           career,
@@ -291,7 +291,6 @@ function FinalResult() {
         {/* Navigation Buttons */}
         <div className="final-result-actions">
 
-          {/* Only visible after assessment completion */}
           {assessmentCompleted && (
             <button
               className="secondary-btn"
