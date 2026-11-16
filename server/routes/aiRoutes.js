@@ -9,46 +9,24 @@ const sleep = (ms) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 const getErrorStatus = (error) =>
-  error.status || error.code || error.error?.code;
+  Number(error.status || error.code || error.error?.code);
 
-async function generateWithRetry(ai, model, message, systemInstruction) {
-  let lastError;
+async function generateResponse(ai, model, message, systemInstruction) {
+  const response = await ai.models.generateContent({
+    model,
+    contents: message,
+    config: {
+      systemInstruction,
+    },
+  });
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: message,
-        config: {
-          systemInstruction,
-        },
-      });
+  const reply = response.text?.trim();
 
-      const reply = response.text?.trim();
-
-      if (reply) return reply;
-
-      throw new Error("AI returned an empty response.");
-    } catch (error) {
-      lastError = error;
-
-      const status = getErrorStatus(error);
-
-      if (![500, 502, 503, 504].includes(Number(status))) {
-        throw error;
-      }
-
-      console.log(
-        `Gemini ${model}: attempt ${attempt} failed with ${status}`
-      );
-
-      if (attempt < 3) {
-        await sleep(attempt * 1000);
-      }
-    }
+  if (!reply) {
+    throw new Error("AI returned an empty response.");
   }
 
-  throw lastError;
+  return reply;
 }
 
 router.post("/chat", protect, async (req, res) => {
@@ -79,6 +57,12 @@ router.post("/chat", protect, async (req, res) => {
 
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        timeout: 45000,
+        retryOptions: {
+          attempts: 1,
+        },
+      },
     });
 
     const systemInstruction = `
@@ -96,10 +80,18 @@ Final Career Readiness Score: ${finalScore}%
 Readiness Level: ${readinessLevel}
 
 Known Skills:
-${selectedSkills.length > 0 ? selectedSkills.join(", ") : "No skills recorded"}
+${
+  selectedSkills.length > 0
+    ? selectedSkills.join(", ")
+    : "No skills recorded"
+}
 
 Missing Skills:
-${missingSkills.length > 0 ? missingSkills.join(", ") : "No major skill gaps recorded"}
+${
+  missingSkills.length > 0
+    ? missingSkills.join(", ")
+    : "No major skill gaps recorded"
+}
 
 Rules:
 - Personalize advice using the student's CareerLens data.
@@ -119,39 +111,54 @@ Rules:
     let reply;
 
     try {
-      // Primary model: retry up to 3 times for temporary server errors
-      reply = await generateWithRetry(
-        ai,
-        "gemini-3.8-flash",
-        message.trim(),
-        systemInstruction
-      );
-    } catch (primaryError) {
-      const status = getErrorStatus(primaryError);
+      console.log("Trying primary Gemini model...");
 
-      // Use backup only when the primary model is temporarily unavailable
-      if (![500, 502, 503, 504].includes(Number(status))) {
-        throw primaryError;
-      }
-
-      console.log("Primary Gemini model unavailable. Trying backup model...");
-
-      reply = await generateWithRetry(
+      reply = await generateResponse(
         ai,
         "gemini-3.5-flash-lite",
         message.trim(),
         systemInstruction
       );
+
+      console.log("Primary Gemini model responded successfully.");
+    } catch (primaryError) {
+      const status = getErrorStatus(primaryError);
+
+      console.log("Primary Gemini Error:", primaryError);
+
+      if (![429, 500, 502, 503, 504].includes(status)) {
+        throw primaryError;
+      }
+
+      console.log("Switching to backup Gemini model...");
+
+      // Short pause before backup request
+      await sleep(500);
+
+      try {
+        reply = await generateResponse(
+          ai,
+          "gemini-3.8-flash",
+          message.trim(),
+          systemInstruction
+        );
+
+        console.log("Backup Gemini model responded successfully.");
+      } catch (backupError) {
+        console.log("Backup Gemini Error:", backupError);
+        throw backupError;
+      }
     }
 
     return res.status(200).json({
       message: "AI response generated successfully",
       reply,
     });
+
   } catch (error) {
     console.log("CareerLens Gemini Error:", error);
 
-    const status = Number(getErrorStatus(error));
+    const status = getErrorStatus(error);
 
     if (status === 429) {
       return res.status(429).json({
